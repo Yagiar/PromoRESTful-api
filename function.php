@@ -122,7 +122,7 @@ function deletePromo($connect, $id){
 }
 
 function addParticipant($connect, $promoId, $data){
-    $name = $data["name"];
+    $name = $data['name'];
     mysqli_query($connect, "INSERT INTO `participant`(`id`, `name`, `promo_id`) VALUES (NULL,'$name','$promoId')");
     http_response_code(201);
     $res=[
@@ -143,7 +143,7 @@ function deleteParticipant($connect, $promoId, $participantId){
 }
 
 function addPrize($connect, $promoId, $data){
-    $description = $data["description"];
+    $description = $data['description'];
     mysqli_query($connect, "INSERT INTO `prize`(`id`, `description`, `promo_id`) VALUES (NULL,'$description','$promoId')");
     http_response_code(201);
     $res=[
@@ -168,19 +168,48 @@ function conductRaffle($connect, $promoId){
     $prizes = mysqli_query($connect, "SELECT * FROM `prize` WHERE promo_id = '$promoId'");
     $participantCount = mysqli_num_rows($participants);
     $prizeCount = mysqli_num_rows($prizes);
-    if($participantCount == $prizeCount){
-        $results = [];
+    if($participantCount == $prizeCount && $participantCount > 0) {
+        $winners = [];
+        
+        // Получаем всех участников
+        $allParticipants = [];
         while ($participant = mysqli_fetch_assoc($participants)) {
+            $allParticipants[] = $participant;
+        }
+        
+        // Перемешиваем участников случайным образом
+        shuffle($allParticipants);
+        
+        // Получаем все призы
+        $allPrizes = [];
+        while ($prize = mysqli_fetch_assoc($prizes)) {
+            $allPrizes[] = $prize;
+        }
+
+        // Сопоставляем каждого перемешанного участника с призом
+        foreach ($allParticipants as $index => $participant) {
             $winner = $participant;
-            $prize = mysqli_fetch_assoc($prizes);
+            $prize = $allPrizes[$index % $prizeCount];
+            
+            // Записываем победителя в базу данных
+            mysqli_query($connect, "INSERT INTO `result` (`winner`, `prize`) VALUES ('$winner[id]', '$prize[id]')");
+
+            // Формируем результат розыгрыша для ответа
             $result = [
                 "winner"=> $winner,
                 "prize"=> $prize
             ];
-            $results[] = $result;
+
+            $winners[] = $result;
         }
-        echo json_encode($results);
+
+        echo json_encode($winners);
     } else {
         http_response_code(409);
+        $res = [
+            "status"=> false,
+            "msg"=> "Конфликт: количество участников и призов должно быть равным и больше 0."
+        ];
+        echo json_encode($res);
     }
 }
